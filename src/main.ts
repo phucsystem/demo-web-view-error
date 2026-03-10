@@ -11,7 +11,10 @@ app.innerHTML = `
       <button id="btn-warning" class="btn btn-warning" type="button">Warning Log</button>
       <button id="btn-error" class="btn btn-error" type="button">Error Log</button>
       <button id="btn-heavy-images" class="btn btn-heavy" type="button">Load Heavy Images</button>
+      <button id="btn-light-api" class="btn btn-light-api" type="button">Light API Request</button>
+      <button id="btn-heavy-api" class="btn btn-heavy-api" type="button">Heavy API Request</button>
     </div>
+    <div id="api-result" class="api-result"></div>
     <div id="image-grid" class="image-grid"></div>
     <div id="log-output" class="log-output"></div>
   </div>
@@ -102,4 +105,58 @@ function loadHeavyImages() {
 
 document.querySelector('#btn-heavy-images')!.addEventListener('click', () => {
   loadHeavyImages()
+})
+
+const apiResult = document.querySelector<HTMLDivElement>('#api-result')!
+
+function renderApiResult(title: string, data: unknown, duration: number) {
+  const jsonString = JSON.stringify(data, null, 2)
+  apiResult.innerHTML = `
+    <div class="api-result-header">
+      <strong>${title}</strong>
+      <span class="api-duration">${duration}ms</span>
+    </div>
+    <pre class="api-json">${jsonString}</pre>
+  `
+}
+
+document.querySelector('#btn-light-api')!.addEventListener('click', async () => {
+  appendLogEntry('info', 'Starting lightweight API request...')
+  apiResult.innerHTML = '<div class="api-loading">Fetching...</div>'
+  const startTime = performance.now()
+
+  try {
+    const response = await fetch('https://jsonplaceholder.typicode.com/posts/1')
+    const data = await response.json()
+    const duration = Math.round(performance.now() - startTime)
+    appendLogEntry('info', `Light API responded in ${duration}ms — single post object`)
+    renderApiResult('Light API — Single Post', data, duration)
+  } catch (fetchError) {
+    const duration = Math.round(performance.now() - startTime)
+    appendLogEntry('error', `Light API failed after ${duration}ms: ${fetchError}`)
+    apiResult.innerHTML = `<div class="api-error">Request failed: ${fetchError}</div>`
+  }
+})
+
+document.querySelector('#btn-heavy-api')!.addEventListener('click', async () => {
+  appendLogEntry('info', 'Starting heavy API request (5000 photos)...')
+  apiResult.innerHTML = '<div class="api-loading">Fetching large dataset...</div>'
+  const startTime = performance.now()
+
+  try {
+    const response = await fetch('https://jsonplaceholder.typicode.com/photos')
+    const data = await response.json()
+    const duration = Math.round(performance.now() - startTime)
+    const payloadSize = new Blob([JSON.stringify(data)]).size
+    const sizeLabel = payloadSize > 1024 * 1024
+      ? `${(payloadSize / (1024 * 1024)).toFixed(1)} MB`
+      : `${(payloadSize / 1024).toFixed(0)} KB`
+    appendLogEntry('warning', `Heavy API responded in ${duration}ms — ${data.length} items, ${sizeLabel}`)
+    renderApiResult(`Heavy API — ${data.length} Photos (${sizeLabel})`, data.slice(0, 20), duration)
+    appendLogEntry('info', 'Showing first 20 items in preview (full dataset received)')
+  } catch (fetchError) {
+    const duration = Math.round(performance.now() - startTime)
+    appendLogEntry('error', `Heavy API failed after ${duration}ms: ${fetchError}`)
+    apiResult.innerHTML = `<div class="api-error">Request failed: ${fetchError}</div>`
+  }
 })
