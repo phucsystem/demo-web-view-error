@@ -13,7 +13,10 @@ app.innerHTML = `
       <button id="btn-heavy-images" class="btn btn-heavy" type="button">Load Heavy Images</button>
       <button id="btn-light-api" class="btn btn-light-api" type="button">Light API Request</button>
       <button id="btn-heavy-api" class="btn btn-heavy-api" type="button">Heavy API Request</button>
+      <button id="btn-slow-dom" class="btn btn-slow-dom" type="button">Slow DOM Load</button>
+      <button id="btn-random-api" class="btn btn-random-api" type="button">Random API Chaos</button>
     </div>
+    <div id="slow-dom-container" class="slow-dom-container"></div>
     <div id="api-result" class="api-result"></div>
     <div id="image-grid" class="image-grid"></div>
     <div id="log-output" class="log-output"></div>
@@ -159,4 +162,156 @@ document.querySelector('#btn-heavy-api')!.addEventListener('click', async () => 
     appendLogEntry('error', `Heavy API failed after ${duration}ms: ${fetchError}`)
     apiResult.innerHTML = `<div class="api-error">Request failed: ${fetchError}</div>`
   }
+})
+
+function blockMainThread(durationMs: number) {
+  const endTime = performance.now() + durationMs
+  while (performance.now() < endTime) {
+    Math.random() * Math.random()
+  }
+}
+
+function forceLayoutThrash(element: HTMLElement) {
+  element.style.width = `${Math.random() * 100}%`
+  void element.offsetHeight
+  element.style.padding = `${Math.random() * 20}px`
+  void element.offsetWidth
+  element.style.margin = `${Math.random() * 10}px`
+  void element.getBoundingClientRect()
+}
+
+function simulateSlowDom() {
+  const container = document.querySelector<HTMLDivElement>('#slow-dom-container')!
+  container.innerHTML = ''
+
+  const totalNodes = 200 + Math.floor(Math.random() * 300)
+  const totalBlockMs = 1000 + Math.floor(Math.random() * 4000)
+  const blockPerNode = totalBlockMs / totalNodes
+
+  appendLogEntry('warning', `Slow DOM: inserting ${totalNodes} nodes with ~${totalBlockMs}ms total main-thread block`)
+
+  const startTime = performance.now()
+  let insertedCount = 0
+
+  function insertBatch() {
+    const batchSize = 5 + Math.floor(Math.random() * 15)
+    const batchEnd = Math.min(insertedCount + batchSize, totalNodes)
+
+    for (let nodeIndex = insertedCount; nodeIndex < batchEnd; nodeIndex++) {
+      const randomDelay = blockPerNode * (0.5 + Math.random())
+      blockMainThread(randomDelay)
+
+      const card = document.createElement('div')
+      card.className = 'slow-dom-card'
+
+      const depth = 1 + Math.floor(Math.random() * 4)
+      let innerHtml = `<span class="slow-dom-text">Node ${nodeIndex + 1}</span>`
+      for (let nestLevel = 0; nestLevel < depth; nestLevel++) {
+        innerHtml = `<div class="slow-dom-nested">${innerHtml}</div>`
+      }
+      card.innerHTML = innerHtml
+
+      container.appendChild(card)
+
+      if (Math.random() < 0.3) {
+        forceLayoutThrash(card)
+      }
+
+      insertedCount++
+    }
+
+    const elapsed = Math.round(performance.now() - startTime)
+    appendLogEntry('info', `Slow DOM: ${insertedCount}/${totalNodes} nodes inserted (${elapsed}ms elapsed)`)
+
+    if (insertedCount < totalNodes) {
+      const jitterDelay = Math.floor(Math.random() * 50)
+      setTimeout(insertBatch, jitterDelay)
+    } else {
+      const totalDuration = Math.round(performance.now() - startTime)
+      appendLogEntry('warning', `Slow DOM: completed ${totalNodes} nodes in ${totalDuration}ms`)
+    }
+  }
+
+  insertBatch()
+}
+
+document.querySelector('#btn-slow-dom')!.addEventListener('click', () => {
+  simulateSlowDom()
+})
+
+const ERROR_SCENARIOS = [
+  { status: 400, statusText: 'Bad Request', body: { error: 'Invalid parameters', message: 'The request payload contains malformed JSON', code: 'INVALID_PAYLOAD' } },
+  { status: 401, statusText: 'Unauthorized', body: { error: 'Authentication required', message: 'Bearer token expired or missing', code: 'AUTH_EXPIRED' } },
+  { status: 403, statusText: 'Forbidden', body: { error: 'Access denied', message: 'Insufficient permissions for this resource', code: 'FORBIDDEN' } },
+  { status: 404, statusText: 'Not Found', body: { error: 'Resource not found', message: 'The requested endpoint does not exist', code: 'NOT_FOUND' } },
+  { status: 408, statusText: 'Request Timeout', body: { error: 'Timeout', message: 'Server did not respond within 30s', code: 'TIMEOUT' } },
+  { status: 429, statusText: 'Too Many Requests', body: { error: 'Rate limited', message: 'Exceeded 100 requests/min. Retry after 60s', code: 'RATE_LIMIT', retryAfter: 60 } },
+  { status: 500, statusText: 'Internal Server Error', body: { error: 'Internal error', message: 'Unexpected null reference in UserService.getProfile()', code: 'INTERNAL_ERROR', trace: 'at UserService.getProfile (user-service.js:142)' } },
+  { status: 502, statusText: 'Bad Gateway', body: { error: 'Bad gateway', message: 'Upstream server returned invalid response', code: 'BAD_GATEWAY' } },
+  { status: 503, statusText: 'Service Unavailable', body: { error: 'Service unavailable', message: 'Server is under maintenance. ETA: 15 minutes', code: 'MAINTENANCE' } },
+  { status: 504, statusText: 'Gateway Timeout', body: { error: 'Gateway timeout', message: 'Upstream server did not respond in time', code: 'GATEWAY_TIMEOUT' } },
+] as const
+
+const SUCCESS_SCENARIOS = [
+  { delay: 50, body: { id: 1, name: 'John Doe', email: 'john@example.com', status: 'active' }, label: 'Fast user lookup (50ms)' },
+  { delay: 800, body: { items: Array.from({ length: 50 }, (_, idx) => ({ id: idx + 1, title: `Item ${idx + 1}` })), total: 50, page: 1 }, label: 'Paginated list (800ms)' },
+  { delay: 2000, body: { report: { generated: new Date().toISOString(), rows: 15000, status: 'complete' } }, label: 'Slow report generation (2s)' },
+  { delay: 3500, body: { upload: { fileId: 'abc-123', size: '4.2MB', status: 'processed' } }, label: 'Very slow file processing (3.5s)' },
+] as const
+
+function renderErrorPage(scenario: typeof ERROR_SCENARIOS[number], duration: number) {
+  const container = document.querySelector<HTMLDivElement>('#api-result')!
+  container.innerHTML = `
+    <div class="error-page">
+      <div class="error-page-header error-page-${scenario.status >= 500 ? 'server' : 'client'}">
+        <span class="error-page-status">${scenario.status}</span>
+        <span class="error-page-status-text">${scenario.statusText}</span>
+      </div>
+      <div class="error-page-body">
+        <div class="error-page-code">${scenario.body.code}</div>
+        <p class="error-page-message">${scenario.body.message}</p>
+        <pre class="error-page-json">${JSON.stringify(scenario.body, null, 2)}</pre>
+        <div class="error-page-meta">
+          <span>Response time: ${duration}ms</span>
+          <span>Timestamp: ${new Date().toISOString()}</span>
+        </div>
+      </div>
+    </div>
+  `
+}
+
+function simulateRandomApi() {
+  const apiResultContainer = document.querySelector<HTMLDivElement>('#api-result')!
+  const failRate = 0.6
+  const willFail = Math.random() < failRate
+  const simulatedLatency = willFail
+    ? 200 + Math.floor(Math.random() * 3000)
+    : 0
+
+  appendLogEntry('info', `Random API: firing request... (${willFail ? 'will fail' : 'will succeed'} after ~${willFail ? simulatedLatency : '?'}ms)`)
+  apiResultContainer.innerHTML = '<div class="api-loading">Requesting...</div>'
+
+  const startTime = performance.now()
+
+  if (willFail) {
+    const scenario = ERROR_SCENARIOS[Math.floor(Math.random() * ERROR_SCENARIOS.length)]
+    setTimeout(() => {
+      const duration = Math.round(performance.now() - startTime)
+      appendLogEntry('error', `Random API: ${scenario.status} ${scenario.statusText} — ${scenario.body.code} (${duration}ms)`)
+      console.error(`[API Error] ${scenario.status} ${scenario.statusText}`, scenario.body)
+      renderErrorPage(scenario, duration)
+    }, simulatedLatency)
+  } else {
+    const scenario = SUCCESS_SCENARIOS[Math.floor(Math.random() * SUCCESS_SCENARIOS.length)]
+    setTimeout(() => {
+      const duration = Math.round(performance.now() - startTime)
+      appendLogEntry('info', `Random API: 200 OK — ${scenario.label} (${duration}ms)`)
+      console.info(`[API Success] 200 OK`, scenario.body)
+      renderApiResult(`200 OK — ${scenario.label}`, scenario.body, duration)
+    }, scenario.delay)
+  }
+}
+
+document.querySelector('#btn-random-api')!.addEventListener('click', () => {
+  simulateRandomApi()
 })
