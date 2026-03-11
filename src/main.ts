@@ -1,4 +1,6 @@
 import './style.css'
+import { initBridge, reportError, reportMetric } from './firebase-bridge'
+import { apiClient } from './axios-client'
 
 const app = document.querySelector<HTMLDivElement>('#app')!
 
@@ -22,6 +24,8 @@ app.innerHTML = `
     <div id="log-output" class="log-output"></div>
   </div>
 `
+
+initBridge()
 
 const logOutput = document.querySelector<HTMLDivElement>('#log-output')!
 
@@ -129,8 +133,8 @@ document.querySelector('#btn-light-api')!.addEventListener('click', async () => 
   const startTime = performance.now()
 
   try {
-    const response = await fetch('https://jsonplaceholder.typicode.com/posts/1')
-    const data = await response.json()
+    const response = await apiClient.get('https://jsonplaceholder.typicode.com/posts/1')
+    const data = response.data
     const duration = Math.round(performance.now() - startTime)
     appendLogEntry('info', `Light API responded in ${duration}ms — single post object`)
     renderApiResult('Light API — Single Post', data, duration)
@@ -147,8 +151,8 @@ document.querySelector('#btn-heavy-api')!.addEventListener('click', async () => 
   const startTime = performance.now()
 
   try {
-    const response = await fetch('https://jsonplaceholder.typicode.com/photos')
-    const data = await response.json()
+    const response = await apiClient.get('https://jsonplaceholder.typicode.com/photos')
+    const data = response.data
     const duration = Math.round(performance.now() - startTime)
     const payloadSize = new Blob([JSON.stringify(data)]).size
     const sizeLabel = payloadSize > 1024 * 1024
@@ -299,6 +303,14 @@ function simulateRandomApi() {
       const duration = Math.round(performance.now() - startTime)
       appendLogEntry('error', `Random API: ${scenario.status} ${scenario.statusText} — ${scenario.body.code} (${duration}ms)`)
       console.error(`[API Error] ${scenario.status} ${scenario.statusText}`, scenario.body)
+      reportError('http-error', `Random API: ${scenario.status} ${scenario.statusText}`, {
+        url: '/simulated/random-api',
+        method: 'GET',
+        status: scenario.status,
+        statusText: scenario.statusText,
+        durationMs: duration,
+        responseBody: JSON.stringify(scenario.body),
+      })
       renderErrorPage(scenario, duration)
     }, simulatedLatency)
   } else {
@@ -307,6 +319,14 @@ function simulateRandomApi() {
       const duration = Math.round(performance.now() - startTime)
       appendLogEntry('info', `Random API: 200 OK — ${scenario.label} (${duration}ms)`)
       console.info(`[API Success] 200 OK`, scenario.body)
+      if (duration > 1000) {
+        reportMetric('slow-response', `Random API: 200 OK (${duration}ms)`, {
+          url: '/simulated/random-api',
+          method: 'GET',
+          status: 200,
+          durationMs: duration,
+        })
+      }
       renderApiResult(`200 OK — ${scenario.label}`, scenario.body, duration)
     }, scenario.delay)
   }
