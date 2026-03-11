@@ -7,17 +7,41 @@ const app = document.querySelector<HTMLDivElement>('#app')!
 app.innerHTML = `
   <div class="container">
     <h1>Demo Web View</h1>
-    <p class="subtitle">Click buttons to trigger console logs</p>
-    <div class="button-group">
-      <button id="btn-info" class="btn btn-info" type="button">Info Log</button>
-      <button id="btn-warning" class="btn btn-warning" type="button">Warning Log</button>
-      <button id="btn-error" class="btn btn-error" type="button">Error Log</button>
-      <button id="btn-heavy-images" class="btn btn-heavy" type="button">Load Heavy Images</button>
-      <button id="btn-light-api" class="btn btn-light-api" type="button">Light API Request</button>
-      <button id="btn-heavy-api" class="btn btn-heavy-api" type="button">Heavy API Request</button>
-      <button id="btn-slow-dom" class="btn btn-slow-dom" type="button">Slow DOM Load</button>
-      <button id="btn-random-api" class="btn btn-random-api" type="button">Random API Chaos</button>
-    </div>
+    <p class="subtitle">WebView Error & Performance Testing</p>
+
+    <section class="demo-section">
+      <h2 class="section-title">Console Logging</h2>
+      <div class="button-group">
+        <button id="btn-info" class="btn btn-info" type="button">Info Log</button>
+        <button id="btn-warning" class="btn btn-warning" type="button">Warning Log</button>
+        <button id="btn-error" class="btn btn-error" type="button">Error Log</button>
+      </div>
+    </section>
+
+    <section class="demo-section">
+      <h2 class="section-title">Error Triggers</h2>
+      <div class="button-group">
+        <button id="btn-exception" class="btn btn-exception" type="button">Trigger Exception</button>
+      </div>
+    </section>
+
+    <section class="demo-section">
+      <h2 class="section-title">API Requests</h2>
+      <div class="button-group">
+        <button id="btn-light-api" class="btn btn-light-api" type="button">Light API Request</button>
+        <button id="btn-heavy-api" class="btn btn-heavy-api" type="button">Heavy API Request</button>
+        <button id="btn-random-api" class="btn btn-random-api" type="button">Random API Chaos</button>
+      </div>
+    </section>
+
+    <section class="demo-section">
+      <h2 class="section-title">Performance Stress</h2>
+      <div class="button-group">
+        <button id="btn-heavy-images" class="btn btn-heavy" type="button">Load Heavy Images</button>
+        <button id="btn-slow-dom" class="btn btn-slow-dom" type="button">Slow DOM Load</button>
+      </div>
+    </section>
+
     <div id="slow-dom-container" class="slow-dom-container"></div>
     <div id="api-result" class="api-result"></div>
     <div id="image-grid" class="image-grid"></div>
@@ -36,6 +60,16 @@ function appendLogEntry(level: 'info' | 'warning' | 'error', message: string) {
   entry.textContent = `[${timestamp}] [${level.toUpperCase()}] ${message}`
   logOutput.prepend(entry)
 }
+
+document.querySelector('#btn-exception')!.addEventListener('click', () => {
+  const message = 'Uncaught TypeError: Cannot read properties of undefined (reading "profile")'
+  appendLogEntry('error', `Exception thrown: ${message}`)
+  reportError('exception', message, {
+    type: 'TypeError',
+    stack: 'at UserService.getProfile (user-service.js:42)\nat Dashboard.render (dashboard.js:18)\nat App.mount (app.js:7)',
+  })
+  throw new TypeError('Cannot read properties of undefined (reading "profile")')
+})
 
 document.querySelector('#btn-info')!.addEventListener('click', () => {
   const message = 'This is an informational message'
