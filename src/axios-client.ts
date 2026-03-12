@@ -1,5 +1,5 @@
 import axios, { type InternalAxiosRequestConfig } from 'axios';
-import { reportError, reportMetric } from './firebase-bridge';
+import { reportError, reportMetric, reportApiTiming } from './firebase-bridge';
 
 declare module 'axios' {
   interface InternalAxiosRequestConfig {
@@ -21,6 +21,11 @@ apiClient.interceptors.response.use(
     const durationMs = Math.round(performance.now() - (response.config.metadata?.startTime ?? performance.now()));
     const method = (response.config.method || 'GET').toUpperCase();
     const url = response.config.url || 'unknown';
+    const responseSize = typeof response.data === 'string'
+      ? response.data.length
+      : JSON.stringify(response.data)?.length || 0;
+
+    reportApiTiming(url, method, response.status, durationMs, responseSize);
 
     if (durationMs > 1000) {
       reportMetric('slow-response', `${method} ${url} → ${response.status} OK (${durationMs}ms)`, {
@@ -42,6 +47,7 @@ apiClient.interceptors.response.use(
 
     if (error.response) {
       const { status, statusText, data } = error.response;
+      reportApiTiming(url, method, status, durationMs);
       const responseBody = typeof data === 'string' ? data : JSON.stringify(data);
       reportError('http-error', `${method} ${url} → ${status} ${statusText}`, {
         url,

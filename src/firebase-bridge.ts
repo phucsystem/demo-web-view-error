@@ -29,6 +29,22 @@ export function reportMetric(level: string, message: string, data?: Record<strin
   console.info(`[bridge:${level}] ${message}`);
 }
 
+export function reportApiTiming(
+  url: string,
+  method: string,
+  status: number,
+  durationMs: number,
+  responseSize?: number,
+): void {
+  sendToNative('api-timing', `${method} ${url} → ${status} in ${durationMs}ms`, {
+    url,
+    method,
+    status,
+    durationMs,
+    responseSize,
+  });
+}
+
 function attachImageErrorHandler(img: HTMLImageElement): void {
   if (img.dataset.bridgeObserved) return;
   img.dataset.bridgeObserved = 'true';
